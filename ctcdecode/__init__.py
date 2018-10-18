@@ -1,4 +1,4 @@
-from ._ext import ctc_decode
+from ._ctc_decode import *
 import torch
 
 

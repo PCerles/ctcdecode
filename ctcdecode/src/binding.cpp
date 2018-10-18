@@ -2,7 +2,8 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include "TH.h"
+#include <torch/torch.h>
+#include <torch/tensor.h>
 #include "scorer.h"
 #include "ctc_beam_search_decoder.h"
 #include "utf8.h"
@@ -22,8 +23,8 @@ int utf8_to_utf8_char_vec(const char* labels, std::vector<std::string>& new_voca
     while (str_i < end);
 }
 
-int beam_decode(THFloatTensor *th_probs,
-                THIntTensor *th_seq_lens,
+int beam_decode(torch::Tensor th_probs,
+                torch::Tensor th_seq_lens,
                 const char* labels,
                 int vocab_size,
                 size_t beam_size,
@@ -32,10 +33,10 @@ int beam_decode(THFloatTensor *th_probs,
                 size_t cutoff_top_n,
                 size_t blank_id,
                 void *scorer,
-                THIntTensor *th_output,
-                THIntTensor *th_timesteps,
-                THFloatTensor *th_scores,
-                THIntTensor *th_out_length)
+                torch::Tensor th_output,
+                torch::Tensor th_timesteps,
+                torch::Tensor th_scores,
+                torch::Tensor th_out_length)
 {
     std::vector<std::string> new_vocab;
     utf8_to_utf8_char_vec(labels, new_vocab);
@@ -43,18 +44,20 @@ int beam_decode(THFloatTensor *th_probs,
     if (scorer != NULL) {
         ext_scorer = static_cast<Scorer *>(scorer);
     }
-    const int64_t max_time = THFloatTensor_size(th_probs, 1);
-    const int64_t batch_size = THFloatTensor_size(th_probs, 0);
-    const int64_t num_classes = THFloatTensor_size(th_probs, 2);
+    const int64_t max_time = th_probs.size(1);
+    const int64_t batch_size = th_probs.size(0);
+    const int64_t num_classes = th_probs.size(2);
 
     std::vector<std::vector<std::vector<double>>> inputs;
+    auto th_seq_lens_a = th_seq_lens.accessor<int,1>();
+    auto th_probs_a = th_probs.accessor<float,3>();
     for (int b=0; b < batch_size; ++b) {
         // avoid a crash by ensuring that an erroneous seq_len doesn't have us try to access memory we shouldn't
-        int seq_len = std::min(THIntTensor_get1d(th_seq_lens, b), (int)max_time);
+        int seq_len = std::min(th_seq_lens_a[b], (int)max_time);
         std::vector<std::vector<double>> temp (seq_len, std::vector<double>(num_classes));
         for (int t=0; t < seq_len; ++t) {
             for (int n=0; n < num_classes; ++n) {
-                float val = THFloatTensor_get3d(th_probs, b, t, n);
+                float val = th_probs_a[b][t][n];
                 temp[t][n] = val;
             }
         }
@@ -72,11 +75,11 @@ int beam_decode(THFloatTensor *th_probs,
             std::vector<int> output_tokens = output.tokens;
             std::vector<int> output_timesteps = output.timesteps;
             for (int t = 0; t < output_tokens.size(); ++t){
-                THIntTensor_set3d(th_output, b, p, t, output_tokens[t]); // fill output tokens
-                THIntTensor_set3d(th_timesteps, b, p, t, output_timesteps[t]); // fill timesteps tokens
+                th_output[b][p][t] = output_tokens[t]; // fill output tokens
+                th_timesteps[b][p][t] = output_timesteps[t]; // fill timesteps tokens
             }
-            THFloatTensor_set2d(th_scores, b, p, n_path_result.first); // fill path scores
-            THIntTensor_set2d(th_out_length, b, p, output_tokens.size());
+            th_scores[b][p] = n_path_result.first; // fill path scores
+            th_out_length[b][p] = static_cast<int>(output_tokens.size());
         }
     }
     return 1;
@@ -86,8 +89,8 @@ int beam_decode(THFloatTensor *th_probs,
 extern "C"
 {
 #include "binding.h"
-        int paddle_beam_decode(THFloatTensor *th_probs,
-                               THIntTensor *th_seq_lens,
+        int paddle_beam_decode(torch::Tensor th_probs,
+                               torch::Tensor th_seq_lens,
                                const char* labels,
                                int vocab_size,
                                size_t beam_size,
@@ -95,17 +98,17 @@ extern "C"
                                double cutoff_prob,
                                size_t cutoff_top_n,
                                size_t blank_id,
-                               THIntTensor *th_output,
-                               THIntTensor *th_timesteps,
-                               THFloatTensor *th_scores,
-                               THIntTensor *th_out_length){
+                               torch::Tensor th_output,
+                               torch::Tensor th_timesteps,
+                               torch::Tensor th_scores,
+                               torch::Tensor th_out_length){
 
             return beam_decode(th_probs, th_seq_lens, labels, vocab_size, beam_size, num_processes,
                         cutoff_prob, cutoff_top_n, blank_id,NULL, th_output, th_timesteps, th_scores, th_out_length);
         }
 
-        int paddle_beam_decode_lm(THFloatTensor *th_probs,
-                                  THIntTensor *th_seq_lens,
+        int paddle_beam_decode_lm(torch::Tensor th_probs,
+                                  torch::Tensor th_seq_lens,
                                   const char* labels,
                                   int vocab_size,
                                   size_t beam_size,
@@ -114,10 +117,10 @@ extern "C"
                                   size_t cutoff_top_n,
                                   size_t blank_id,
                                   void *scorer,
-                                  THIntTensor *th_output,
-                                  THIntTensor *th_timesteps,
-                                  THFloatTensor *th_scores,
-                                  THIntTensor *th_out_length){
+                                  torch::Tensor th_output,
+                                  torch::Tensor th_timesteps,
+                                  torch::Tensor th_scores,
+                                  torch::Tensor th_out_length){
 
             return beam_decode(th_probs, th_seq_lens, labels, vocab_size, beam_size, num_processes,
                         cutoff_prob, cutoff_top_n, blank_id,scorer, th_output, th_timesteps, th_scores, th_out_length);
