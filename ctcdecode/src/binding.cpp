@@ -34,6 +34,7 @@ int beam_decode(THFloatTensor *th_probs,
                 void *scorer,
                 THIntTensor *th_output,
                 THIntTensor *th_timesteps,
+                THFloatTensor *th_char_scores,
                 THFloatTensor *th_scores,
                 THIntTensor *th_out_length)
 {
@@ -71,9 +72,11 @@ int beam_decode(THFloatTensor *th_probs,
             Output output = n_path_result.second;
             std::vector<int> output_tokens = output.tokens;
             std::vector<int> output_timesteps = output.timesteps;
+            std::vector<double> output_scores = output.scores;
             for (int t = 0; t < output_tokens.size(); ++t){
                 THIntTensor_set3d(th_output, b, p, t, output_tokens[t]); // fill output tokens
                 THIntTensor_set3d(th_timesteps, b, p, t, output_timesteps[t]); // fill timesteps tokens
+                THIntTensor_set3d(th_char_scores, b, p, t, output_timesteps[t]);
             }
             THFloatTensor_set2d(th_scores, b, p, n_path_result.first); // fill path scores
             THIntTensor_set2d(th_out_length, b, p, output_tokens.size());

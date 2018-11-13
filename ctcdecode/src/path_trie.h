@@ -26,6 +26,7 @@ public:
   // get the prefix in index from some stop node to current nodel
   PathTrie* get_path_vec(std::vector<int>& output,
                          std::vector<int>& timesteps,
+                         std::vector<double>& scores,
                          int stop,
                          size_t max_steps = std::numeric_limits<size_t>::max());
 

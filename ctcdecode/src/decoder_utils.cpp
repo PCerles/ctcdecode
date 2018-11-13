@@ -54,10 +54,12 @@ std::vector<std::pair<double, Output>> get_beam_search_result(
   for (size_t i = 0; i < beam_size && i < space_prefixes.size(); ++i) {
     std::vector<int> output;
     std::vector<int> timesteps;
-    space_prefixes[i]->get_path_vec(output, timesteps);
+    std::vector<double> scores;
+    space_prefixes[i]->get_path_vec(output, timesteps, scores);
     Output outputs;
     outputs.tokens = output;
     outputs.timesteps = timesteps;
+    outputs.scores = scores;
     std::pair<double, Output> output_pair(-space_prefixes[i]->approx_ctc,
                                                outputs);
     output_vecs.emplace_back(output_pair);
